@@ -16,6 +16,21 @@ class Trunk(object):
         self.angle = angle
 
 
+# https://stackoverflow.com/questions/53420826/overlay-two-pixmaps-with-alpha-value-using-qpainter
+def overlay_pixmap(base, overlay):
+    # Assumes both have same size
+    rez = QPixmap(base.size())
+    rez.fill(QtCore.Qt.transparent)
+    painter = QPainter(rez)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.drawPixmap(QtCore.QPoint(), base)
+    painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+    painter.drawPixmap(rez.rect(), overlay, overlay.rect())
+    painter.end()
+
+    return rez
+
+
 class DataLabeler(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
@@ -33,18 +48,17 @@ class DataLabeler(QMainWindow):
 
         # Drawing-related stuff here
         self.pixmap = QPixmap()
-        self.painter = QPainter(self.pixmap)
         self.image_label = QLabel()
         main_layout.addWidget(self.image_label)
         self.trunks = []
 
-        self.pen = QPen(QtCore.Qt.red)
-        self.pen.setWidth(3)
-        self.painter.setPen(self.pen)
+        self.overlay = None
+        self.overlay_painter = None
 
         self.image_label.setPixmap(self.pixmap)
         self.image_label.setObjectName("image")
         self.image_label.mousePressEvent = self.handle_mouse_click
+        self.image_label.mouseMoveEvent = self.handle_mouse_move
         self.image_label.show()
         self.original_size_x = 0
 
@@ -52,11 +66,16 @@ class DataLabeler(QMainWindow):
 
         # UI-related stuff here
         options_ui = QHBoxLayout()
-        button_1 = QPushButton('Test')
+        button_1 = QPushButton('Load')
         button_1.clicked.connect(self.update_image)
+
+        button_2 = QPushButton('Clear')
+        button_2.clicked.connect(self.clear_overlay)
+
         self.text_input = QLineEdit()
         options_ui.addWidget(button_1)
         options_ui.addWidget(self.text_input)
+        options_ui.addWidget(button_2)
 
         main_layout.addLayout(options_ui)
 
@@ -73,11 +92,14 @@ class DataLabeler(QMainWindow):
         self.pixmap = QPixmap(path)
         self.original_size_x = self.pixmap.width()
         self.pixmap = self.pixmap.scaled(1280, 800, QtCore.Qt.KeepAspectRatio)
-        self.painter = QPainter(self.pixmap)
+        self.orig_pixmap = self.pixmap.copy()
 
-        self.pen = QPen(QtCore.Qt.red)
-        self.pen.setWidth(3)
-        self.painter.setPen(self.pen)
+        self.overlay = QPixmap(self.pixmap.size())
+        self.overlay.fill(QtCore.Qt.transparent)
+        self.overlay_painter = QPainter(self.overlay)
+        pen = QPen(QtCore.Qt.blue)
+        pen.setWidth(3)
+        self.overlay_painter.setPen(pen)
 
         self.image_label.setPixmap(self.pixmap)
         self.image_label.show()
@@ -94,28 +116,67 @@ class DataLabeler(QMainWindow):
         img_x, img_y = click_x * scale, click_y * scale
 
         self.selections.append((img_x, img_y))
+
         if len(self.selections) == 1:
-            self.pen.setColor(QtCore.Qt.blue)
-            self.painter.drawEllipse(click_x, click_y, 3, 3)
-            self.image_label.setPixmap(self.pixmap)
-            self.image_label.show()
-            print('Drew circle')
+            self.image_label.setMouseTracking(True)
+        if len(self.selections) == 3:
+            self.image_label.setMouseTracking(False)
+            # Process the clicks, add them to the master data list
 
-        elif len(self.selections) == 2:
 
-            self.pen.setColor(QtCore.Qt.red)
-            x1, y1 = self.selections[0]
-            x2, y2 = self.selections[1]
-            x = min(x1, x2) / scale
-            y = min(y1, y2) / scale
-            w = abs(x2-x1) / scale
-            h = abs(y2-y1) / scale
-
-            self.painter.drawRect(x, y, w, h)
             self.selections = []
-            self.image_label.setPixmap(self.pixmap)
-            self.image_label.show()
-            print('Drew rectangle')
+
+    def handle_mouse_move(self, event):
+        pos = event.pos()
+        click_x, click_y = pos.x(), pos.y()
+        scale = self.original_size_x / self.pixmap.width()
+        # img_x, img_y = click_x * scale, click_y * scale
+
+        if len(self.selections) == 1:
+            # Draw line
+            last_x, last_y = self.selections[0]
+            last_x /= scale
+            last_y /= scale
+
+            last = np.array([last_x, last_y])
+
+            self.overlay.fill(QtCore.Qt.transparent)
+            self.overlay_painter.drawLine(last_x, last_y, click_x, click_y)
+
+        if len(self.selections) == 2:
+            last_x, last_y = self.selections[0]
+            last_x /= scale
+            last_y /= scale
+
+            last = np.array([last_x, last_y])
+
+            second_x, second_y = self.selections[1]
+            second_x /= scale
+            second_y /= scale
+
+            second = np.array([second_x, second_y])
+            diff = second - last
+            diff_perp = np.array([-diff[1], diff[0]])
+
+            # Solve for how long vec should be
+            vec_scale = (click_x - second_x) / diff_perp[0]
+            corner_top = second + vec_scale * diff_perp
+            corner_bottom = last + vec_scale * diff_perp
+            self.overlay.fill(QtCore.Qt.transparent)
+            self.overlay_painter.drawLine(second[0], second[1], last[0], last[1])
+            self.overlay_painter.drawLine(second[0], second[1], corner_top[0], corner_top[1])
+            self.overlay_painter.drawLine(last[0], last[1], corner_bottom[0], corner_bottom[1])
+            self.overlay_painter.drawLine(corner_top[0], corner_top[1], corner_bottom[0], corner_bottom[1])
+
+        merged = overlay_pixmap(self.pixmap, self.overlay)
+        self.image_label.setPixmap(merged)
+
+
+    def clear_overlay(self):
+        self.image_label.setMouseTracking(False)
+        self.overlay.fill(QtCore.Qt.transparent)
+        self.selections = []
+        self.image_label.setPixmap(self.orig_pixmap)
 
 
 if __name__ == '__main__':
