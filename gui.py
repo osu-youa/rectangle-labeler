@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import QMainWindow, QCheckBox, QGroupBox, QGridLayout, QVBo
 from PyQt5.QtWidgets import QApplication, QHBoxLayout, QWidget, QLabel, QLineEdit
 from PyQt5.QtGui import QPainter, QPixmap, QPen
 import numpy as np
+import pickle
+from _collections import defaultdict
+import random
 
 class Trunk(object):
     def __init__(self, o_x, o_y, width, angle):
@@ -48,6 +51,7 @@ class DataLabeler(QMainWindow):
 
         # Drawing-related stuff here
         self.pixmap = QPixmap()
+        self.orig_pixmap = QPixMap()
         self.image_label = QLabel()
         main_layout.addWidget(self.image_label)
         self.trunks = []
@@ -66,36 +70,95 @@ class DataLabeler(QMainWindow):
 
         # UI-related stuff here
         options_ui = QHBoxLayout()
-        button_1 = QPushButton('Load')
-        button_1.clicked.connect(self.update_image)
+        # button_1 = QPushButton('Load')
+        # button_1.clicked.connect(self.update_image)
 
         button_2 = QPushButton('Clear')
         button_2.clicked.connect(self.clear_overlay)
 
-        self.text_input = QLineEdit()
-        options_ui.addWidget(button_1)
-        options_ui.addWidget(self.text_input)
+        # self.text_input = QLineEdit()
+        # options_ui.addWidget(button_1)
         options_ui.addWidget(button_2)
 
         main_layout.addLayout(options_ui)
 
-        # Temp
-        self.text_input.setText('test/farm-environment.jpg')
+        # Data initialization
+        self.clicks = 0
+        try:
+            with open('labelled_data.pickle', 'rb') as fh:
+                self.current_data = pickle.load(fh)
+            self.previous = sorted(self.current_data.keys())
+            self.current = len(self.previous)
+
+
+        except FileNotFoundError:
+            self.current_data = defaultdict(list)
+            self.current = 0
+            self.previous = []
+
+        all_files = os.listdir('images')
+        if not all_files:
+            raise ValueError('Please put some images into the images folder first!')
+        self.remaining = list(set(all_files) - set(self.previous))
+        random.shuffle(self.remaining)
+        if not self.remaining:
+            self.current = len(self.current_data) - 1
+
         self.update_image()
 
+    def keyPressEvent(self,event):
+        pressed = event.key()
+        if pressed == QtCore.Qt.Key_D and len(self.selections) == 0:
+
+            if self.current > 0:
+                self.current -= 1
+                self.update_image()
+            else:
+                print('This is the first image!')
+
+        elif pressed == QtCore.Qt.Key_F and len(self.selections) == 0:
+            self.current += 1
+            if self.remaining:
+                self.update_image()
+            else:
+                if self.current >= len(self.previous):
+                    print('All out of images to load!')
+                    self.save()
+                    self.current -= 1
+                else:
+                    self.update_image()
+        elif pressed == QtCore.Qt.Key_E:
+            self.clear_overlay()
+
+        elif pressed == QtCore.Qt.Key_S:
+            self.save()
 
     def update_image(self):
-        path = self.text_input.text()
-        if not os.path.exists(path):
-            print('Path does not exist!')
-            return
-        self.pixmap = QPixmap(path)
+
+        if self.current >= len(self.previous):
+
+            self.clicks = (self.clicks + 1) % 5
+            if not self.clicks:
+                self.save()
+
+            # Pick a random image to load
+            image_name = self.remaining.pop()
+            self.previous.append(image_name)
+            self.current_data[image_name] = []
+        else:
+            image_name = self.previous[self.current]
+
+        if self.overlay_painter is not None:
+            self.overlay_painter.end()
+
+        self.pixmap = QPixmap(os.path.join('images', image_name))
         self.original_size_x = self.pixmap.width()
         self.pixmap = self.pixmap.scaled(1280, 800, QtCore.Qt.KeepAspectRatio)
         self.orig_pixmap = self.pixmap.copy()
 
         self.overlay = QPixmap(self.pixmap.size())
         self.overlay.fill(QtCore.Qt.transparent)
+
         self.overlay_painter = QPainter(self.overlay)
         pen = QPen(QtCore.Qt.blue)
         pen.setWidth(3)
@@ -103,7 +166,7 @@ class DataLabeler(QMainWindow):
 
         self.image_label.setPixmap(self.pixmap)
         self.image_label.show()
-        print('New image {} loaded!'.format(path))
+        print('New image {} loaded!'.format(image_name))
 
         self.selections = []
 
@@ -122,7 +185,8 @@ class DataLabeler(QMainWindow):
         if len(self.selections) == 3:
             self.image_label.setMouseTracking(False)
             # Process the clicks, add them to the master data list
-
+            self.current_data[self.previous[self.current]] = 3
+            print(self.current_data)
 
             self.selections = []
 
@@ -171,12 +235,23 @@ class DataLabeler(QMainWindow):
         merged = overlay_pixmap(self.pixmap, self.overlay)
         self.image_label.setPixmap(merged)
 
+    def update_pixmap_with_markers(self):
+        data = self.current_data[self.current]
+        # Take orig pixmap, create overlay with all shapes
+        # Set as the displayed pixmap
+
 
     def clear_overlay(self):
         self.image_label.setMouseTracking(False)
         self.overlay.fill(QtCore.Qt.transparent)
         self.selections = []
         self.image_label.setPixmap(self.orig_pixmap)
+        self.current_data[self.current] = []
+
+    def save(self):
+        with open('labelled_data.pickle', 'wb') as fh:
+            pickle.dump(self.current_data, fh)
+        print('Saved data!')
 
 
 if __name__ == '__main__':
