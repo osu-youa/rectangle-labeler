@@ -188,15 +188,17 @@ class DataLabeler(QMainWindow):
             # Process the clicks, add them to the master data list
 
 
-            base = np.array(self.selections[0])
-            up_end = np.array(self.selections[1])
-            last_clicked = np.array(self.selections[2])
+            base = np.array(self.selections[0]) / scale
+            up_end = np.array(self.selections[1]) / scale
+            last_clicked = np.array(self.selections[2]) / scale
 
             up_vec = up_end - base
             perp_vec = np.array([up_vec[1], -up_vec[0]])
             perp_vec_scale = (last_clicked[0] - up_end[0]) / perp_vec[0]
             width = np.linalg.norm(perp_vec * perp_vec_scale)
             angle = np.arctan2(up_vec[1], up_vec[0]) + np.pi / 2
+
+
 
             self.current_data[self.previous[self.current]].append(np.array([base[0] * scale, base[1] * scale,
                                                              angle, width * scale]))
