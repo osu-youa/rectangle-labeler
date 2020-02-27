@@ -165,7 +165,8 @@ class DataLabeler(QMainWindow):
         self.image_label.setPixmap(self.pixmap)
         self.image_label.show()
         print('New image {} loaded!'.format(image_name))
-        self.info_label.setText('Image: {}'.format(image_name))
+        self.info_label.setText('({}) Image: {}'.format(len(self.current_data), image_name))
+
         self.update_pixmap_with_markers()
 
         self.selections = []
