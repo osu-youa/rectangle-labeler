@@ -40,7 +40,7 @@ for file_name in data:
     name.text = file_name
 
     for label in labels:
-        x, y, width, angle = label
+        x, y, angle, width = label
         angle -= np.pi/2
 
         corner = np.array([x, y])
