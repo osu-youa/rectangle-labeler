@@ -204,8 +204,6 @@ class DataLabeler(QMainWindow):
                                                              angle, width * scale]))
 
             self.selections = []
-
-            print(self.current_data)
             self.update_pixmap_with_markers()
 
     def handle_mouse_move(self, event):
@@ -272,12 +270,23 @@ class DataLabeler(QMainWindow):
             width /= scale
             angle -= np.pi/2
 
-            c1 = np.array([x, y])
+            # c1 = np.array([x, y])
+            # up_vec = np.array([np.cos(angle), np.sin(angle)]) * width
+            # perp_vec = np.array([-up_vec[1], up_vec[0]])
+            # c2 = c1 + up_vec
+            # c3 = c2 + perp_vec
+            # c4 = c1 + perp_vec
+
+            corner = np.array([x, y])
             up_vec = np.array([np.cos(angle), np.sin(angle)]) * width
             perp_vec = np.array([-up_vec[1], up_vec[0]])
-            c2 = c1 + up_vec
-            c3 = c2 + perp_vec
-            c4 = c1 + perp_vec
+
+            center = corner + (up_vec + perp_vec) / 2
+
+            c1 = center + np.array([-width, width / 2])
+            c2 = center + np.array([width, width / 2])
+            c3 = center + np.array([width, -width * 2.5])
+            c4 = center + np.array([-width, -width * 2.5])
 
             painter.drawLine(c1[0], c1[1], c2[0], c2[1])
             painter.drawLine(c2[0], c2[1], c3[0], c3[1])
