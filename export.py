@@ -21,8 +21,8 @@ DATA_LOCATION = os.path.join(os.path.expanduser('~'), 'data', 'OurData')
 ANNOTATION_FOLDER = os.path.join(DATA_LOCATION, 'annotations')
 IMAGE_FOLDER = os.path.join(DATA_LOCATION, 'images')
 IMAGE_SET_CUTOFFS = {
-    '001': '002500',
-    '003': '002500',
+    '001': '001700',
+    '003': '001900',
     '005': '001500',
 }
 
@@ -83,21 +83,19 @@ for file_name in data:
     metadata = file_name.replace('.jpg', '').split('_')
     dataset = metadata[0]
     item = metadata[1]
-    if item > IMAGE_SET_CUTOFFS[dataset]:
-        continue
-
+    is_test = item > IMAGE_SET_CUTOFFS[dataset]
 
     boxes = get_boxes(file_name)
-    cuts = np.random.uniform(0, MAX_CUT, size=(AUGMENTATION_NUM+1, 4))
+    cuts = np.random.uniform(0, MAX_CUT, size=(1 if is_test else AUGMENTATION_NUM+1, 4))
     cuts[0] = 0
-
-
 
     img = imageio.imread(os.path.join(RAW_DATA_FOLDER, file_name))
 
     for i, cut in enumerate(cuts):
 
         output_file = file_name.replace('.jpg', '_{}.jpg'.format(i)) if i > 0 else file_name
+        if is_test:
+            output_file = 'test_' + output_file
 
         current_template = deepcopy(template)
         name = SubElement(current_template, 'filename')
