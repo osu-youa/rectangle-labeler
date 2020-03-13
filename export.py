@@ -13,7 +13,7 @@ except:
 import cv2
 
 # ----------------- PARAMS ----------------------
-MAX_CUT = 0.1               # Can be cut 20% on each side
+MAX_CUT = 0.1               # How much of each side will be cut off? Must be <0.5
 AUGMENTATION_NUM = 1        # How many augmented images to produced?
 
 RAW_DATA_FOLDER = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'raw_data')
@@ -26,6 +26,7 @@ IMAGE_SET_CUTOFFS = {
     '005': '001500',
 }
 
+# ---------------- CODE AND STUFF ---------------
 data = {}
 files = ['labelled_data.pickle', 'labelled_data_2.pickle']
 for file_name in files:
